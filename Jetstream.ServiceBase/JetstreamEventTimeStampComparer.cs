@@ -1,5 +1,5 @@
 ﻿/*
-     Copyright 2015 Terso Solutions, Inc.
+     Copyright 2016 Terso Solutions, Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// <param name="x"></param>
         /// <param name="y"></param>
         /// <returns></returns>
+        /// <exception cref="Exception">Unable to compare Messages because one of the messages did not have a SentTimestamp Attribute</exception>
         public int Compare(JetstreamEvent x, JetstreamEvent y)
         {
             DateTime sentTimestampX = x.EventTime;
@@ -48,7 +49,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
 
             int result = epochX.CompareTo(epochY);
 
-            return (result != 0) ? result : String.Compare(x.EventId, y.EventId, StringComparison.Ordinal);
+            return result != 0 ? result : String.Compare(x.EventId, y.EventId, StringComparison.Ordinal);
 
             // same SentTimestamp so use the messageId for comparison
         }
