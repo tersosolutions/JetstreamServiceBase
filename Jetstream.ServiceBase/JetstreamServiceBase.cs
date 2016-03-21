@@ -1,5 +1,5 @@
 ﻿﻿/*
-     Copyright 2015 Terso Solutions, Inc.
+     Copyright 2016 Terso Solutions, Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
         private readonly SortedSet<JetstreamEvent> _set = new SortedSet<JetstreamEvent>(new JetstreamEventTimeStampComparer()); // use a Red-Black tree for the producer-consumer data store
         private volatile bool _isWindowing;
         private event EventHandler<NewWindowEventArgs> NewWindow;
-        private readonly string _eventLogSource = "JetstreamServiceBase";
+        private const string _eventLogSource = "JetstreamServiceBase";
 
         #endregion
 
@@ -146,6 +146,8 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// override the OnStart for the windows service to hook the NewWindow event.
         /// </summary>
         /// <param name="args"></param>
+        /// <exception cref="ConfigurationErrorsException">There is no UserAccesskey in the appSettings</exception>
+        /// <exception cref="ConfigurationErrorsException">There is no JetstreamUrl in the appSettings</exception>
         protected override void OnStart(string[] args)
         {
             // validate that the service is configured correctly
@@ -360,7 +362,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
             _cts = new CancellationTokenSource();
 
             // start the window timer
-            _windowTimer = new Timer(WindowCallback, _cts.Token, 0, Convert.ToInt64(MessageCheckWindow.TotalMilliseconds));
+            _windowTimer = new Timer(WindowCallback, _cts.Token, TimeSpan.Zero, MessageCheckWindow);
             IsWindowing = true;
         }
 
@@ -481,7 +483,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
                                 }
                             default:
                                 {
-                                    ProcessUnknownMessage(m.ToString());
+                                    ProcessUnknownMessage(m);
                                     break;
                                 }
 
@@ -589,7 +591,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// <param name="message">
         /// The unknown message body
         /// </param>
-        protected virtual void ProcessUnknownMessage(String message) { }
+        protected virtual void ProcessUnknownMessage(JetstreamEvent message) { }
 
         #endregion
 
