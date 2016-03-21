@@ -1,5 +1,5 @@
 ﻿/*
-     Copyright 2015 Terso Solutions, Inc.
+     Copyright 2016 Terso Solutions, Inc.
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -29,7 +29,9 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// Constructor for the custom EventArgs.
         /// </summary>
         /// <param name="messages"></param>
-        internal NewWindowEventArgs(IEnumerable<JetstreamEvent> messages) {
+        /// <exception cref="ArgumentNullException"><paramref name="messages"/> is <see langword="null" />.</exception>
+        internal NewWindowEventArgs(IEnumerable<JetstreamEvent> messages)
+        {
             if (messages == null) throw new ArgumentNullException("messages");
 
             Messages = messages;
