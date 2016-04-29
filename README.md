@@ -18,7 +18,7 @@ This Windows service implementation includes the ability to leverage the [Jetstr
 * v1.5 - October 14, 2015 - Added to Github
 
 ### License
-Copyright 2015 Terso Solutions, Inc.
+Copyright 2016 Terso Solutions, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at:
 http://www.apache.org/licenses/LICENSE-2.0
