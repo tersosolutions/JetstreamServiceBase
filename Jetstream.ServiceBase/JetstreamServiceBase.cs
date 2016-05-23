@@ -316,8 +316,20 @@ namespace TersoSolutions.Jetstream.ServiceBase
                             // get all messages less than the time windows from the Red-Black tree.
                             lock (_setLock)
                             {
-                                messages.AddRange(_set.Where(m => m.EventTime < windowTime));
-                                _set.RemoveWhere(m => m.EventTime < windowTime);
+                                // Remove the date time logic which determines what
+                                // gets added to the messages list and removed from
+                                // the _set collection. In this implementation, we 
+                                // process the entire pile of events each time. 
+                                // 
+                                // After removing the condition time component (.Where
+                                // based on EventTime that was here previously) of 
+                                // fixed the problem where this service was writing
+                                // duplicate events to its implementation in the Splunk
+                                // service.
+
+                                // Case 212759
+                                messages.AddRange(_set);
+                                _set.Clear();
                             }
 
                             // remove duplicates
@@ -486,7 +498,6 @@ namespace TersoSolutions.Jetstream.ServiceBase
                                     ProcessUnknownMessage(m);
                                     break;
                                 }
-
                         }
                     }
                     catch (Exception ex)
@@ -589,7 +600,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// Method for processing unknown messages.
         /// </summary>
         /// <param name="message">
-        /// The unknown message body
+        /// The unknown message
         /// </param>
         protected virtual void ProcessUnknownMessage(JetstreamEvent message) { }
 
