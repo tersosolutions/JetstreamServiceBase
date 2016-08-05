@@ -53,7 +53,6 @@ namespace TersoSolutions.Jetstream.ServiceBase
         private readonly SortedSet<JetstreamEvent> _set = new SortedSet<JetstreamEvent>(new JetstreamEventTimeStampComparer()); // use a Red-Black tree for the producer-consumer data store
         private volatile bool _isWindowing;
         private event EventHandler<NewWindowEventArgs> NewWindow;
-        private const string _eventLogSource = "JetstreamServiceBase";
 
         #endregion
 
@@ -124,6 +123,17 @@ namespace TersoSolutions.Jetstream.ServiceBase
             private set
             {
                 _isWindowing = value;
+            }
+        }
+        
+        /// <summary>
+        /// Default event log source for windows
+        /// </summary>
+        protected virtual string EventLogSource
+        {
+            get
+            {
+                return "JetstreamServiceBase";
             }
         }
 
@@ -267,7 +277,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
             }
             catch (Exception ex)
             {
-                EventLog.WriteEntry(_eventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
+                EventLog.WriteEntry(EventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
             }
             return String.Empty;
         }
@@ -286,7 +296,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
             }
             catch (Exception ex)
             {
-                EventLog.WriteEntry(_eventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
+                EventLog.WriteEntry(EventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
             }
         }
 
@@ -307,7 +317,6 @@ namespace TersoSolutions.Jetstream.ServiceBase
                 {
                     try
                     {
-                        DateTime windowTime = (DateTime.UtcNow.Subtract(MessageCheckWindow));
                         batchId = ReceiveTask(ct);
 
                         // ok so all messages have been received and ordered or no more messages can be popped
@@ -361,7 +370,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
             }
             catch (Exception ex)
             {
-                EventLog.WriteEntry(_eventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
+                EventLog.WriteEntry(EventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
             }
         }
 
@@ -502,7 +511,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
                     }
                     catch (Exception ex)
                     {
-                        EventLog.WriteEntry(_eventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
+                        EventLog.WriteEntry(EventLogSource, ex.Message + "\n" + ex.StackTrace, EventLogEntryType.Error);
                     }
                 }
             }
