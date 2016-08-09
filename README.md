@@ -1,8 +1,10 @@
 ![Terso Solutions Logo](http://www.tersosolutions.com/wp-content/uploads/2016/04/TersoHorizontal_BlackGreen.png "Terso Solutions, Inc.")
 
 ## Jetstream SDK Windows Service
-[Jetstream Documentation and Tools - https://jetstreamrfid.com/tools](https://jetstreamrfid.com/tools)
- 
+[Jetstream Documentation - https://jetstreamrfid.com/documentation/applicationapi/1.5](https://jetstreamrfid.com/documentation/applicationapi/1.5)
+
+[Jetstream Tools - https://jetstreamrfid.com/tools](https://jetstreamrfid.com/tools)
+
 ###Microsoft .NET Framework 4.5
 This Windows service implementation includes the ability to leverage the [Jetstream SDK](https://github.com/tersosolutions/JetstreamSDK-.NET) to get and remove events from Jetstream. Use those events to process inventory transactions in your application.
 
@@ -21,6 +23,6 @@ This Windows service implementation includes the ability to leverage the [Jetstr
 Copyright 2016 Terso Solutions, Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License at:
-http://www.apache.org/licenses/LICENSE-2.0
+[http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0).
 
 Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
