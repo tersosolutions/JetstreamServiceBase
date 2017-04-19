@@ -10,7 +10,7 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("Terso Solutions, Inc.")]
 [assembly: AssemblyProduct("Jetstream.Service")]
-[assembly: AssemblyCopyright("Copyright © Terso Solutions, Inc. 2016")]
+[assembly: AssemblyCopyright("Copyright © Terso Solutions, Inc. 2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
