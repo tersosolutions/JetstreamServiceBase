@@ -3,8 +3,6 @@
 ## Jetstream SDK Windows Service
 [Jetstream Documentation - https://jetstreamrfid.com/documentation/applicationapi/1.5](https://jetstreamrfid.com/documentation/applicationapi/1.5)
 
-[Jetstream Tools - https://jetstreamrfid.com/tools](https://jetstreamrfid.com/tools)
-
 ### Microsoft .NET Framework 4.5
 This Windows service implementation includes the ability to leverage the [Jetstream SDK](https://github.com/tersosolutions/JetstreamSDK-.NET) to get and remove events from Jetstream. Use those events to process inventory transactions in your application.
 
