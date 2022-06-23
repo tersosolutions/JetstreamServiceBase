@@ -1,4 +1,4 @@
-﻿/*
+/*
     Copyright 2022 Terso Solutions, Inc.
 
   Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,25 +14,21 @@
   limitations under the License.
 */
 
-using System.Collections.Generic;
-using TersoSolutions.Jetstream.Sdk.Objects.Events;
+using Xunit;
 
-namespace TersoSolutions.Jetstream.ServiceBase
+namespace TersoSolutions.Jetstream.ServiceBase.Tests
 {
-    /// <summary>
-    /// Sort events by time
-    /// </summary>
-    public class EventComparer : IComparer<EventDto>
+    public class JetstreamServiceOptionsTests
     {
-        /// <summary>
-        /// Compare the times
-        /// </summary>
-        /// <param name="x"></param>
-        /// <param name="y"></param>
-        /// <returns></returns>
-        public int Compare(EventDto x, EventDto y)
+        [Fact]
+        public void GetEventsLimit_HappyPath()
         {
-            return x.EventTime < y.EventTime ? -1 : 1;
+            const int count = 100;
+            var options = new JetstreamServiceOptions();
+
+            options.GetEventsLimit = count;
+
+            Assert.Equal(count, options.GetEventsLimit);
         }
     }
 }

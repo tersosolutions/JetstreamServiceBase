@@ -20,19 +20,18 @@ using TersoSolutions.Jetstream.Sdk.Objects.Events;
 namespace TersoSolutions.Jetstream.ServiceBase
 {
     /// <summary>
-    /// Sort events by time
+    /// Object for a Jetstream get events response
     /// </summary>
-    public class EventComparer : IComparer<EventDto>
+    public class JetstreamEventsResponse
     {
         /// <summary>
-        /// Compare the times
+        /// Batch ID
         /// </summary>
-        /// <param name="x"></param>
-        /// <param name="y"></param>
-        /// <returns></returns>
-        public int Compare(EventDto x, EventDto y)
-        {
-            return x.EventTime < y.EventTime ? -1 : 1;
-        }
+        public string BatchId { get; set; }
+
+        /// <summary>
+        /// Sorted Jetstream events
+        /// </summary>
+        public SortedSet<EventDto> Events { get; set; }
     }
 }

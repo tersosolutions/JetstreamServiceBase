@@ -14,6 +14,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Jetstream.ServiceBase", "Jetstream.ServiceBase\Jetstream.ServiceBase.csproj", "{55DA7864-736B-46EB-9106-3CB16B8AA46C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Jetstream.ServiceBase.Tests", "Jetstream.ServiceBase.Tests\Jetstream.ServiceBase.Tests.csproj", "{2519D327-D36A-42A9-BC9F-D4C449AC1512}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -24,6 +26,10 @@ Global
 		{55DA7864-736B-46EB-9106-3CB16B8AA46C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{55DA7864-736B-46EB-9106-3CB16B8AA46C}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{55DA7864-736B-46EB-9106-3CB16B8AA46C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2519D327-D36A-42A9-BC9F-D4C449AC1512}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2519D327-D36A-42A9-BC9F-D4C449AC1512}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2519D327-D36A-42A9-BC9F-D4C449AC1512}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2519D327-D36A-42A9-BC9F-D4C449AC1512}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -32,13 +38,15 @@ Global
 		SolutionGuid = {32858415-B315-4504-9E40-0D73E2AE340E}
 	EndGlobalSection
 	GlobalSection(TeamFoundationVersionControl) = preSolution
-		SccNumberOfProjects = 1
+		SccNumberOfProjects = 3
 		SccEnterpriseProvider = {4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}
 		SccTeamFoundationServer = https://dev.azure.com/tersosolutions
-		SccProjectUniqueName0 = Jetstream.ServiceBase\\Jetstream.ServiceBase.csproj
-		SccProjectName0 = Jetstream.ServiceBase
-		SccAuxPath0 = https://dev.azure.com/tersosolutions
-		SccLocalPath0 = Jetstream.ServiceBase
-		SccProvider0 = {4CA58AB2-18FA-4F8D-95D4-32DDF27D184C}
+		SccLocalPath0 = .
+		SccProjectUniqueName1 = Jetstream.ServiceBase\\Jetstream.ServiceBase.csproj
+		SccProjectName1 = Jetstream.ServiceBase
+		SccLocalPath1 = Jetstream.ServiceBase
+		SccProjectUniqueName2 = Jetstream.ServiceBase.Tests\\Jetstream.ServiceBase.Tests.csproj
+		SccProjectName2 = Jetstream.ServiceBase.Tests
+		SccLocalPath2 = Jetstream.ServiceBase.Tests
 	EndGlobalSection
 EndGlobal

@@ -1,9 +1,26 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿/*
+    Copyright 2022 Terso Solutions, Inc.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+*/
+
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,38 +39,16 @@ namespace TersoSolutions.Jetstream.ServiceBase
 
         #region Data
 
-        private readonly object _newWindowLock = new object();
-        private readonly object _windowLock = new object();
-        private readonly object _setLock = new object();
+        private const int DefaultGetEventsLimit = 500;
+        private Task _eventProcessingTask = Task.CompletedTask;
+
+        private JetstreamServiceOptions _options;
+        private Timer _getEventsTimer;
+        private bool _isDisposed;
 
         private readonly IDisposable _optionsChangeToken;
         private readonly ILogger _logger;
-        private readonly SortedSet<EventDto> _sortedSet = new SortedSet<EventDto>(new EventComparer());
-
-        private event EventHandler<NewWindowEventArgs> NewWindow;
-        private Timer _windowTimer;
-        private CancellationTokenSource _cts;
-        private TimeSpan _messageCheckWindow;
-        private Uri _jetstreamUrl;
-        private string _userAccessKey;
-
-        private volatile bool _isWindowing;
-        private int? _getEventsLimit;
-
-        private const string CategoryBaseService = "JetstreamServiceBase";
-
-        #endregion
-
-        #region Properties
-
-        /// <summary>
-        /// Indicates if currently polling/windowing events
-        /// </summary>
-        public bool IsWindowing
-        {
-            get => _isWindowing;
-            private set => _isWindowing = value;
-        }
+        private readonly IJetstreamClient _jetstreamClient;
 
         #endregion
 
@@ -61,20 +56,23 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// Constructor for the service base
         /// </summary>
         /// <param name="loggerFactory">LoggerFactory object</param>
+        /// <param name="jetstreamClient"></param>
         /// <param name="options">Jetstream options</param>
         /// <exception cref="T:System.ArgumentNullException">Logging factory cannot be null <paramref name="loggerFactory"/></exception>
         /// <exception cref="T:System.ArgumentNullException">Options object cannot be null <paramref name="options"/></exception>
-        protected JetstreamServiceBase(ILoggerFactory loggerFactory, IOptionsMonitor<JetstreamServiceOptions> options)
+        protected JetstreamServiceBase(ILoggerFactory loggerFactory, IJetstreamClient jetstreamClient, IOptionsMonitor<JetstreamServiceOptions> options)
         {
             // Validate input
             if (loggerFactory == null) throw new ArgumentNullException(nameof(loggerFactory), "Logging factory cannot be null");
+            if (jetstreamClient == null) throw new ArgumentNullException(nameof(jetstreamClient), "Jetstream client cannot be null");
             if (options == null) throw new ArgumentNullException(nameof(options), "Options object cannot be null");
 
             // Handles Updates
             _optionsChangeToken = options.OnChange(UpdateOptions);
 
             // Assign settings
-            _logger = loggerFactory.CreateLogger(CategoryBaseService);
+            _logger = loggerFactory.CreateLogger<JetstreamServiceBase>();
+            _jetstreamClient = jetstreamClient;
             UpdateOptions(options.CurrentValue);
         }
 
@@ -84,10 +82,7 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// <param name="options">Jetstream options object</param>
         private void UpdateOptions(JetstreamServiceOptions options)
         {
-            _jetstreamUrl = options.JetstreamUrl;
-            _userAccessKey = options.UserAccessKey;
-            _getEventsLimit = options.GetEventsLimit;
-            _messageCheckWindow = options.MessageCheckWindow;
+            _options = options;
         }
 
         #region Service Events
@@ -99,11 +94,8 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// <returns></returns>
         public virtual Task StartAsync(CancellationToken cancellationToken)
         {
-            // start all of the background processing
-            StartProcesses();
-
-            // hook an event handler to the NewWindow event
-            NewWindow += JetstreamServiceNewWindowHandler;
+            // Start getting events
+            _getEventsTimer = new Timer(BeginEventProcessing, cancellationToken, new TimeSpan(0, 1, 0), _options.MessageCheckWindow);
 
             return Task.CompletedTask;
         }
@@ -113,10 +105,19 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// </summary>
         /// <param name="cancellationToken"></param>
         /// <returns></returns>
+        /// <exception cref="T:System.NullReferenceException">The <see cref="T:System.Runtime.CompilerServices.TaskAwaiter"></see> object was not properly initialized.</exception>
+        /// <exception cref="T:System.Threading.Tasks.TaskCanceledException">The task was canceled.</exception>
+        /// <exception cref="T:System.Exception">The task completed in a <see cref="F:System.Threading.Tasks.TaskStatus.Faulted"></see> state.</exception>
         public virtual Task StopAsync(CancellationToken cancellationToken)
         {
-            // stop all of the background processing
-            StopProcesses();
+            // Stop timer
+            _getEventsTimer.Change(Timeout.Infinite, 0);
+
+            // Let the event processing finish
+            _eventProcessingTask.GetAwaiter().GetResult();
+
+            // Dispose of things
+            Dispose();
 
             return Task.CompletedTask;
         }
@@ -124,11 +125,23 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// <summary>
         /// Dispose of necessary objects
         /// </summary>
-        public virtual void Dispose()
+        public void Dispose()
         {
-            _cts?.Dispose();
-            _windowTimer?.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Dispose of necessary objects
+        /// </summary>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (_isDisposed) return;
+
+            _getEventsTimer?.Dispose();
             _optionsChangeToken?.Dispose();
+
+            _isDisposed = true;
         }
 
         #endregion
@@ -136,338 +149,177 @@ namespace TersoSolutions.Jetstream.ServiceBase
         #region Jetstream event popping
 
         /// <summary>
-        /// Task for receiving events from Jetstream
+        /// Start async event processing
         /// </summary>
-        /// <param name="ct">Token to cancel processing</param>
-        private string ReceiveTask(CancellationToken ct)
+        /// <param name="state">Cancellation token</param>
+        private void BeginEventProcessing(object state)
         {
-            var currentBatchId = string.Empty;
+            _logger.LogTrace("Get events execution starting...");
+
+            // Setup cancellation token
+            var ct = (CancellationToken)state;
+
+            // Check if cancelled
+            if (ct.IsCancellationRequested) return;
+
+            // Use Task for locking
+            if (!_eventProcessingTask.IsCompleted) return;
 
             try
             {
-                _logger.LogTrace("Starting to retrieve Jetstream events...", CategoryBaseService);
-
-                // Build the Jetstream client for the access key and get events
-                var client = new JetstreamClient(_userAccessKey, _jetstreamUrl);
-                var response = client.GetEvents(_getEventsLimit ?? 500);
-                currentBatchId = response.BatchId;
-
-                _logger.LogTrace("Got " + response.Count + " events in batch " + currentBatchId, CategoryBaseService);
-
-                if (ct.IsCancellationRequested) return currentBatchId;
-
-                // Now add the events to the data store for the window thread
-                lock (_setLock)
-                {
-                    // Step through the received events and add them to processing set
-                    foreach (EventDto t in response.Events)
-                    {
-                        if (ct.IsCancellationRequested)
-                        {
-                            break;
-                        }
-                        _sortedSet.Add(t);
-                    }
-                }
-                return currentBatchId;
-            }
-            catch (JetstreamException jsException)
-            {
-                // Log and pass exception to event handler for any processing
-                _logger.LogError(JsonConvert.SerializeObject(jsException), CategoryBaseService);
-                HandleJetstreamGetEventsException(jsException, currentBatchId);
-            }
-
-            return string.Empty;
-        }
-
-        /// <summary>
-        /// Task for deleting events from Jetstream
-        /// </summary>
-        /// <param name="batchId">The events batch ID to delete</param>
-        private void DeleteTask(string batchId)
-        {
-            try
-            {
-                _logger.LogTrace("Deleting batch " + batchId, CategoryBaseService);
-
-                var client = new JetstreamClient(_userAccessKey, _jetstreamUrl);
-                client.DeleteEvents(new DeleteEventsDto { BatchId = batchId });
-            }
-            catch (JetstreamException jsException)
-            {
-                _logger.LogError(JsonConvert.SerializeObject(jsException), CategoryBaseService);
-                HandleJetstreamDeleteEventsException(jsException, batchId);
-            }
-        }
-
-        /// <summary>
-        /// Callback for windowing the events ordered by time queued
-        /// </summary>
-        /// <param name="state"></param>
-        private void WindowCallback(object state)
-        {
-            try
-            {
-                _logger.LogTrace("Window callback execution starting...", CategoryBaseService);
-
-                var ct = (CancellationToken)state;
-                var events = new List<EventDto>();
-
-                // Synchronize the processing of windows
-                if (ct.IsCancellationRequested || !Monitor.TryEnter(_windowLock, 1000)) return;
-
-                _logger.LogTrace("Getting events for application...", CategoryBaseService);
-
-                try
-                {
-                    var batchId = ReceiveTask(ct);
-
-                    // All events have been received and ordered or no more events are available
-                    if (!ct.IsCancellationRequested)
-                    {
-                        // Get all events
-                        lock (_setLock)
-                        {
-                            _logger.LogTrace("Moving events in set", CategoryBaseService);
-
-                            events.AddRange(_sortedSet);
-                            _sortedSet.Clear();
-                        }
-
-                        // Group the events by event id and grab one from each group
-                        // effectively removing any chance of a duplicate event. GroupBy
-                        // preserves the original order in the list
-                        var orderedEvents = events.GroupBy(x => x.EventId).Select(group => group.First());
-
-                        // raise the WindowEvent with the results
-                        if (!ct.IsCancellationRequested)
-                        {
-                            _logger.LogTrace("Sending events to be processed", CategoryBaseService);
-                            OnNewWindow(orderedEvents);
-                        }
-                    }
-
-                    // Check if events can be deleted
-                    if (!ct.IsCancellationRequested && events.Any())
-                    {
-                        DeleteTask(batchId);
-                    }
-                }
-                finally
-                {
-                    Monitor.Exit(_windowLock);
-                }
+                // Process application events
+                _eventProcessingTask = ProcessApplicationAsync();
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, CategoryBaseService);
+                _logger.LogError(ex, "Error processing messages");
             }
         }
 
         /// <summary>
-        /// Starts all of the background processing
+        /// Full get, process, delete events for an application
         /// </summary>
-        private void StartProcesses()
+        /// <returns></returns>
+        /// <remarks>
+        /// This method must be async in order to thread
+        /// </remarks>
+        private async Task ProcessApplicationAsync()
         {
-            // create a new cancellation token source
-            _cts = new CancellationTokenSource();
+            // Explanation of ConfigureAwait https://devblogs.microsoft.com/dotnet/configureawait-faq/
+            // Get events first
+            var response = await GetJetstreamEvents().ConfigureAwait(false);
 
-            // start the window timer
-            _windowTimer = new Timer(WindowCallback, _cts.Token, new TimeSpan(0, 1, 0), _messageCheckWindow);
-            IsWindowing = true;
+            // All done if no events
+            if (!response.Events.Any()) return;
+
+            // Process Jetstream events
+            await ProcessJetstreamEvents(response.Events).ConfigureAwait(false);
+
+            // Delete the batch now that it's been processed
+            await DeleteJetstreamEventsAsync(response.BatchId).ConfigureAwait(false);
         }
 
         /// <summary>
-        /// Cancels all of the background processing
+        /// Get Jetstream events for an application
         /// </summary>
-        private void StopProcesses()
+        /// <returns></returns>
+        private async Task<JetstreamEventsResponse> GetJetstreamEvents()
         {
-            // signal a cancel to the background threads
-            _cts?.Cancel();
+            _logger.LogTrace("Starting to retrieve Jetstream events...");
 
-            // now dispose of them
-            _windowTimer?.Dispose();
-            _cts?.Dispose();
+            var batchId = string.Empty;
+            var sortedSet = new SortedSet<EventDto>(new EventComparer());
 
-            IsWindowing = false;
-        }
-
-        /// <summary>
-        /// On event raising pattern implementation for the NewWindow event
-        /// </summary>
-        /// <param name="events">Collection of events to begin processing</param>
-        private void OnNewWindow(IEnumerable<EventDto> events)
-        {
-            NewWindow?.Invoke(this, new NewWindowEventArgs(events));
-        }
-
-        /// <summary>
-        /// Event handler for the NewWindow event
-        /// </summary>
-        /// <param name="sender">Events Service</param>
-        /// <param name="e">The NewWindow event object</param>
-        private void JetstreamServiceNewWindowHandler(object sender, NewWindowEventArgs e)
-        {
-            // lock so we process all events in order
-            lock (_newWindowLock)
+            try
             {
-                // Step through the events in the list
-                foreach (var m in e.Events)
+                var response = await _jetstreamClient.GetEventsAsync(_options.GetEventsLimit ?? DefaultGetEventsLimit).ConfigureAwait(false);
+                batchId = response.BatchId;
+
+                _logger.LogTrace($"Got {response.Count} events in batch {batchId}");
+
+                // Step through the received events and add them to the sorted set
+                foreach (var eventDto in response.Events)
                 {
-                    try
+                    if (sortedSet.All(x => x.EventId != eventDto.EventId))
                     {
-                        // Deserialize the JSON string into the appropriate event
-                        switch (m.Type.Trim().ToLower())
-                        {
-                            case "aggregateevent":
-                                {
-                                    // Cast and process aggregate event
-                                    var message = (AggregateEventDto)m;
-                                    ProcessAggregateEvent(message);
-                                    break;
-                                }
-                            case "commandcompletionevent":
-                                {
-                                    // Cast and process command completion event
-                                    var message = (CommandCompletionEventDto)m;
-                                    ProcessCommandCompletionEvent(message);
-                                    break;
-                                }
-                            case "commandqueuedevent":
-                                {
-                                    // Cast and process command queued event
-                                    var message = (CommandQueuedEventDto)m;
-                                    ProcessCommandQueuedEvent(message);
-                                    break;
-                                }
-                            case "heartbeatevent":
-                                {
-                                    // Cast and process heartbeat event
-                                    var message = (HeartbeatEventDto)m;
-                                    ProcessHeartbeatEvent(message);
-                                    break;
-                                }
-                            case "logentryevent":
-                                {
-                                    // Cast and process log entry event
-                                    var message = (LogEntryEventDto)m;
-                                    ProcessLogEntryEvent(message);
-                                    break;
-                                }
-                            case "logicaldeviceaddedevent":
-                                {
-                                    // v2 and under event only
-                                    var json = JsonConvert.SerializeObject(m);
-                                    var message = JsonConvert.DeserializeObject<LogicalDeviceAddedEventDto>(json);
-                                    ProcessLogicalDeviceAddedEvent(message);
-                                    break;
-                                }
-                            case "deviceaddedevent":
-                                {
-                                    // Cast and process device added event
-                                    var message = (DeviceAddedEventDto)m;
-                                    ProcessDeviceAddedEvent(message);
-                                    break;
-                                }
-                            case "logicaldeviceremovedevent":
-                                {
-                                    // v2 and under event only
-                                    var json = JsonConvert.SerializeObject(m);
-                                    var message = JsonConvert.DeserializeObject<LogicalDeviceRemovedEventDto>(json);
-                                    ProcessLogicalDeviceRemovedEvent(message);
-                                    break;
-                                }
-                            case "deviceremovedevent":
-                                {
-                                    // Cast and process device removed event
-                                    var message = (DeviceRemovedEventDto)m;
-                                    ProcessDeviceRemovedEvent(message);
-                                    break;
-                                }
-                            case "devicemodifiedevent":
-                                {
-                                    // Cast and process device modified event
-                                    var message = (DeviceModifiedEventDto)m;
-                                    ProcessDeviceModifiedEvent(message);
-                                    break;
-                                }
-                            case "objectevent":
-                                {
-                                    // Cast and process object event
-                                    var message = (ObjectEventDto)m;
-                                    ProcessObjectEvent(message);
-                                    break;
-                                }
-                            case "sensorreadingevent":
-                                {
-                                    // Cast and process sensor reading event
-                                    var message = (SensorReadingEventDto)m;
-                                    ProcessSensorReadingEvent(message);
-                                    break;
-                                }
-                            case "aliasaddedevent":
-                                {
-                                    // Cast and process alias added event
-                                    var message = (AliasAddedEventDto)m;
-                                    ProcessAliasAddedEvent(message);
-                                    break;
-                                }
-                            case "aliasremovedevent":
-                                {
-                                    // Cast and process alias removed event
-                                    var message = (AliasRemovedEventDto)m;
-                                    ProcessAliasRemovedEvent(message);
-                                    break;
-                                }
-                            case "aliasmodifiedevent":
-                                {
-                                    // Case and process alias modified event
-                                    var message = (AliasModifiedEventDto)m;
-                                    ProcessAliasModifiedEvent(message);
-                                    break;
-                                }
-                            case "devicecredentialsaddedevent":
-                                {
-                                    // Cast and process device credentials added event
-                                    var message = (DeviceCredentialsAddedEventDto)m;
-                                    ProcessDeviceCredentialsAddedEvent(message);
-                                    break;
-                                }
-                            case "devicecredentialsremovedevent":
-                                {
-                                    // Cast and process device credentials removed event
-                                    var message = (DeviceCredentialsRemovedEventDto)m;
-                                    ProcessDeviceCredentialsRemovedEvent(message);
-                                    break;
-                                }
-                            case "devicecredentialsmodifiedevent":
-                                {
-                                    // Cast and process device credentials modified event
-                                    var message = (DeviceCredentialsModifiedEventDto)m;
-                                    ProcessDeviceCredentialsModifiedEvent(message);
-                                    break;
-                                }
-                            case "businessprocessevent":
-                                {
-                                    // Cast and process business process event
-                                    var message = (BusinessProcessEventDto)m;
-                                    ProcessBusinessProcessEvent(message);
-                                    break;
-                                }
-                            default:
-                                {
-                                    // Process unknown event
-                                    ProcessUnknownMessage(m);
-                                    break;
-                                }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, CategoryBaseService);
+                        sortedSet.Add(eventDto);
                     }
                 }
+            }
+            catch (JetstreamException e)
+            {
+                // Log and pass exception to event handler for any processing
+                _logger.LogError(JsonConvert.SerializeObject(e));
+                await HandleJetstreamGetEventsExceptionAsync(e, batchId).ConfigureAwait(false);
+            }
+
+            return new JetstreamEventsResponse
+            {
+                BatchId = batchId,
+                Events = sortedSet
+            };
+        }
+
+        /// <summary>
+        /// Process Jetstream events for an application
+        /// </summary>
+        /// <param name="eventDtos"></param>
+        private async Task ProcessJetstreamEvents(ICollection<EventDto> eventDtos)
+        {
+            _logger.LogTrace($"Starting to process {eventDtos.Count}");
+
+            // https://stackoverflow.com/a/4233539/5217488
+            var eventDelegates = new Dictionary<string, Delegate>
+            {
+                {"aggregateevent", new Func<AggregateEventDto, Task>(ProcessAggregateEventAsync)},
+                {"commandcompletionevent", new Func<CommandCompletionEventDto, Task>(ProcessCommandCompletionEventAsync)},
+                {"commandqueuedevent", new Func<CommandQueuedEventDto, Task>(ProcessCommandQueuedEventAsync)},
+                {"heartbeatevent", new Func<HeartbeatEventDto, Task>(ProcessHeartbeatEventAsync)},
+                {"logentryevent", new Func<LogEntryEventDto, Task>(ProcessLogEntryEventAsync)},
+                {"logicaldeviceaddedevent", new Func<EventDto, Task>(ConvertAndProcessLogicalDeviceAddedEventAsync)},
+                {"deviceaddedevent", new Func<DeviceAddedEventDto, Task>(ProcessDeviceAddedEventAsync)},
+                {"logicaldeviceremovedevent", new Func<EventDto, Task>(ConvertAndProcessLogicalDeviceRemovedEventAsync)},
+                {"deviceremovedevent", new Func<DeviceRemovedEventDto, Task>(ProcessDeviceRemovedEventAsync)},
+                {"devicemodifiedevent", new Func<DeviceModifiedEventDto, Task>(ProcessDeviceModifiedEventAsync)},
+                {"objectevent", new Func<ObjectEventDto, Task>(ProcessObjectEventAsync)},
+                {"sensorreadingevent", new Func<SensorReadingEventDto, Task>(ProcessSensorReadingEventAsync)},
+                {"aliasaddedevent", new Func<AliasAddedEventDto, Task>(ProcessAliasAddedEventAsync)},
+                {"aliasremovedevent", new Func<AliasRemovedEventDto, Task>(ProcessAliasRemovedEventAsync)},
+                {"aliasmodifiedevent", new Func<AliasModifiedEventDto, Task>(ProcessAliasModifiedEventAsync)},
+                {"devicecredentialsaddedevent", new Func<DeviceCredentialsAddedEventDto, Task>(ProcessDeviceCredentialsAddedEventAsync)},
+                {"devicecredentialsremovedevent", new Func<DeviceCredentialsRemovedEventDto, Task>(ProcessDeviceCredentialsRemovedEventAsync)},
+                {"devicecredentialsmodifiedevent", new Func<DeviceCredentialsModifiedEventDto, Task>(ProcessDeviceCredentialsModifiedEventAsync)},
+                {"businessprocessevent", new Func<BusinessProcessEventDto, Task>(ProcessBusinessProcessEventAsync)},
+                {"statusevent", new Func<StatusEventDto, Task>(ProcessStatusEventAsync)}
+            };
+
+            // Process the list of events
+            foreach (var eventDto in eventDtos)
+            {
+                var eventType = eventDto.Type.Trim().ToLower();
+                var stopwatch = new Stopwatch();
+                stopwatch.Start();
+
+                try
+                {
+                    if (eventDelegates.ContainsKey(eventType))
+                    {
+                        // Known event type
+                        await ((Task)eventDelegates[eventType].DynamicInvoke(eventDto)).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        // Unknown event type
+                        await ProcessUnknownMessageAsync(eventDto).ConfigureAwait(false);
+                    }
+                }
+                catch (Exception e)
+                {
+                    _logger.LogError(e, "Error processing event");
+                }
+
+                stopwatch.Stop();
+
+                _logger.LogTrace($"Took {stopwatch.Elapsed} to process {eventType}");
+            }
+        }
+
+        /// <summary>
+        /// Delete a batch of Jetstream events
+        /// </summary>
+        /// <param name="batchId"></param>
+        private async Task DeleteJetstreamEventsAsync(string batchId)
+        {
+            _logger.LogTrace($"Deleting event batch {batchId}");
+
+            try
+            {
+                await _jetstreamClient.DeleteEventsAsync(new DeleteEventsDto { BatchId = batchId }).ConfigureAwait(false);
+            }
+            catch (JetstreamException jsException)
+            {
+                _logger.LogError(JsonConvert.SerializeObject(jsException));
+                await HandleJetstreamDeleteEventsExceptionAsync(jsException, batchId).ConfigureAwait(false);
             }
         }
 
@@ -480,14 +332,14 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// </summary>
         /// <param name="jsException">Jetstream exception</param>
         /// <param name="batchId">Event batch ID</param>
-        protected abstract void HandleJetstreamGetEventsException(JetstreamException jsException, string batchId);
+        protected abstract Task HandleJetstreamGetEventsExceptionAsync(JetstreamException jsException, string batchId);
 
         /// <summary>
         /// Method to do some extra handling when an exception occurs on a Delete Events
         /// </summary>
         /// <param name="jsException">Jetstream exception</param>
         /// <param name="batchId">Event batch ID</param>
-        protected abstract void HandleJetstreamDeleteEventsException(JetstreamException jsException, string batchId);
+        protected abstract Task HandleJetstreamDeleteEventsExceptionAsync(JetstreamException jsException, string batchId);
 
         #endregion
 
@@ -497,121 +349,158 @@ namespace TersoSolutions.Jetstream.ServiceBase
         /// Method for processing a new <paramref name="aggregateEvent"/>
         /// </summary>
         /// <param name="aggregateEvent">Deserialized AggregateEvent object</param>
-        protected abstract void ProcessAggregateEvent(AggregateEventDto aggregateEvent);
+        protected abstract Task ProcessAggregateEventAsync(AggregateEventDto aggregateEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="commandCompletionEvent"/>
         /// </summary>
         /// <param name="commandCompletionEvent">Deserialized CommandCompletionEvent object</param>
-        protected abstract void ProcessCommandCompletionEvent(CommandCompletionEventDto commandCompletionEvent);
+        protected abstract Task ProcessCommandCompletionEventAsync(CommandCompletionEventDto commandCompletionEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="commandQueuedEvent"/>
         /// </summary>
         /// <param name="commandQueuedEvent">Deserialized CommandQueuedEvent object</param>
-        protected abstract void ProcessCommandQueuedEvent(CommandQueuedEventDto commandQueuedEvent);
+        protected abstract Task ProcessCommandQueuedEventAsync(CommandQueuedEventDto commandQueuedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="heartbeatEvent"/>
         /// </summary>
         /// <param name="heartbeatEvent">Deserialized HeartbeatEvent object</param>
-        protected abstract void ProcessHeartbeatEvent(HeartbeatEventDto heartbeatEvent);
+        protected abstract Task ProcessHeartbeatEventAsync(HeartbeatEventDto heartbeatEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="logEntryEvent"/>
         /// </summary>
         /// <param name="logEntryEvent">Deserialized LogEntryEvent object</param>
-        protected abstract void ProcessLogEntryEvent(LogEntryEventDto logEntryEvent);
+        protected abstract Task ProcessLogEntryEventAsync(LogEntryEventDto logEntryEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="logicalDeviceAddedEvent"/>
         /// </summary>
         /// <param name="logicalDeviceAddedEvent">Deserialized LogicalDeviceAdded object</param>
-        protected abstract void ProcessLogicalDeviceAddedEvent(LogicalDeviceAddedEventDto logicalDeviceAddedEvent);
+        protected abstract Task ProcessLogicalDeviceAddedEventAsync(LogicalDeviceAddedEventDto logicalDeviceAddedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="deviceAddedEventDto"/>
         /// </summary>
         /// <param name="deviceAddedEventDto">Deserialized LogicalDeviceAddedEvent object</param>
-        protected abstract void ProcessDeviceAddedEvent(DeviceAddedEventDto deviceAddedEventDto);
+        protected abstract Task ProcessDeviceAddedEventAsync(DeviceAddedEventDto deviceAddedEventDto);
 
         /// <summary>
         /// Method for processing a new <paramref name="logicalDeviceRemovedEvent"/>
         /// </summary>
         /// <param name="logicalDeviceRemovedEvent">Deserialized LogicalDeviceRemovedEvent object</param>
-        protected abstract void ProcessLogicalDeviceRemovedEvent(LogicalDeviceRemovedEventDto logicalDeviceRemovedEvent);
+        protected abstract Task ProcessLogicalDeviceRemovedEventAsync(LogicalDeviceRemovedEventDto logicalDeviceRemovedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="deviceRemovedEvent"/>
         /// </summary>
         /// <param name="deviceRemovedEvent">Deserialized LogicalDeviceRemovedEvent</param>
-        protected abstract void ProcessDeviceRemovedEvent(DeviceRemovedEventDto deviceRemovedEvent);
+        protected abstract Task ProcessDeviceRemovedEventAsync(DeviceRemovedEventDto deviceRemovedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="deviceModifiedEvent"/>
         /// </summary>
         /// <param name="deviceModifiedEvent">Deserialized DeviceModifiedEvent object</param>
-        protected abstract void ProcessDeviceModifiedEvent(DeviceModifiedEventDto deviceModifiedEvent);
+        protected abstract Task ProcessDeviceModifiedEventAsync(DeviceModifiedEventDto deviceModifiedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="objectEvent"/>
         /// </summary>
         /// <param name="objectEvent">Deserialized ObjectEvent object</param>
-        protected abstract void ProcessObjectEvent(ObjectEventDto objectEvent);
+        protected abstract Task ProcessObjectEventAsync(ObjectEventDto objectEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="sensorReadingEvent"/>
         /// </summary>
         /// <param name="sensorReadingEvent">Deserialized SensorReadingEvent object</param>
-        protected abstract void ProcessSensorReadingEvent(SensorReadingEventDto sensorReadingEvent);
+        protected abstract Task ProcessSensorReadingEventAsync(SensorReadingEventDto sensorReadingEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="aliasAddedEvent"/>
         /// </summary>
         /// <param name="aliasAddedEvent">Deserialized AliasAddedEvent object</param>
-        protected abstract void ProcessAliasAddedEvent(AliasAddedEventDto aliasAddedEvent);
+        protected abstract Task ProcessAliasAddedEventAsync(AliasAddedEventDto aliasAddedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="aliasRemovedEvent"/>
         /// </summary>
         /// <param name="aliasRemovedEvent">Deserialized AliasRemovedEvent object</param>
-        protected abstract void ProcessAliasRemovedEvent(AliasRemovedEventDto aliasRemovedEvent);
+        protected abstract Task ProcessAliasRemovedEventAsync(AliasRemovedEventDto aliasRemovedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="aliasModifiedEvent"/>
         /// </summary>
         /// <param name="aliasModifiedEvent">Deserialized AliasModifiedEvent object</param>
-        protected abstract void ProcessAliasModifiedEvent(AliasModifiedEventDto aliasModifiedEvent);
+        protected abstract Task ProcessAliasModifiedEventAsync(AliasModifiedEventDto aliasModifiedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="deviceCredentialsAddedEvent"/>
         /// </summary>
         /// <param name="deviceCredentialsAddedEvent">Deserialized DeviceCredentialsAddedEvent</param>
-        protected abstract void ProcessDeviceCredentialsAddedEvent(DeviceCredentialsAddedEventDto deviceCredentialsAddedEvent);
+        protected abstract Task ProcessDeviceCredentialsAddedEventAsync(DeviceCredentialsAddedEventDto deviceCredentialsAddedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="deviceCredentialsRemovedEvent"/>
         /// </summary>
         /// <param name="deviceCredentialsRemovedEvent">Deserialized DeviceCredentialsRemovedEvent</param>
-        protected abstract void ProcessDeviceCredentialsRemovedEvent(DeviceCredentialsRemovedEventDto deviceCredentialsRemovedEvent);
+        protected abstract Task ProcessDeviceCredentialsRemovedEventAsync(DeviceCredentialsRemovedEventDto deviceCredentialsRemovedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="deviceCredentialsModifiedEvent"/>
         /// </summary>
         /// <param name="deviceCredentialsModifiedEvent">Deserialized DeviceCredentialsModifiedEvent object</param>
-        protected abstract void ProcessDeviceCredentialsModifiedEvent(DeviceCredentialsModifiedEventDto deviceCredentialsModifiedEvent);
+        protected abstract Task ProcessDeviceCredentialsModifiedEventAsync(DeviceCredentialsModifiedEventDto deviceCredentialsModifiedEvent);
 
         /// <summary>
         /// Method for processing a new <paramref name="businessProcessEventDto"/>
         /// </summary>
         /// <param name="businessProcessEventDto">Deserialized BusinessProcessEventDto object</param>
-        protected abstract void ProcessBusinessProcessEvent(BusinessProcessEventDto businessProcessEventDto);
+        protected abstract Task ProcessBusinessProcessEventAsync(BusinessProcessEventDto businessProcessEventDto);
+
+        /// <summary>
+        /// Method for processing a new <paramref name="statusEventDto"/>
+        /// </summary>
+        /// <param name="statusEventDto">Deserialized StatusEventDto object</param>
+        /// <returns></returns>
+        protected abstract Task ProcessStatusEventAsync(StatusEventDto statusEventDto);
 
         /// <summary>
         /// Method for processing unknown events
         /// </summary>
         /// <param name="message">The unknown event</param>
-        protected abstract void ProcessUnknownMessage(EventDto message);
+        protected abstract Task ProcessUnknownMessageAsync(EventDto message);
+
+        #endregion
+
+        #region Helpers
+
+        /// <summary>
+        /// Convert the <paramref name="eventDto"/> to a LogicalDeviceAddedEventDto
+        /// </summary>
+        /// <param name="eventDto">Event to convert</param>
+        /// <returns></returns>
+        private Task ConvertAndProcessLogicalDeviceAddedEventAsync(EventDto eventDto)
+        {
+            // v2 and under event only
+            var json = JsonConvert.SerializeObject(eventDto);
+            var message = JsonConvert.DeserializeObject<LogicalDeviceAddedEventDto>(json);
+            return ProcessLogicalDeviceAddedEventAsync(message);
+        }
+
+        /// <summary>
+        /// Convert the <paramref name="eventDto"/> to a LogicalDeviceRemovedEventDto
+        /// </summary>
+        /// <param name="eventDto">Event to convert</param>
+        /// <returns></returns>
+        private Task ConvertAndProcessLogicalDeviceRemovedEventAsync(EventDto eventDto)
+        {
+            // v2 and under event only
+            var json = JsonConvert.SerializeObject(eventDto);
+            var message = JsonConvert.DeserializeObject<LogicalDeviceRemovedEventDto>(json);
+            return ProcessLogicalDeviceRemovedEventAsync(message);
+        }
 
         #endregion
 

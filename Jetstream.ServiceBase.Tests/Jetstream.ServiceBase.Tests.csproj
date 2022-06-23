@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup Label="Globals">
+    <SccProjectName>SAK</SccProjectName>
+    <SccProvider>SAK</SccProvider>
+    <SccAuxPath>SAK</SccAuxPath>
+    <SccLocalPath>SAK</SccLocalPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <RootNamespace>TersoSolutions.Jetstream.ServiceBase.Tests</RootNamespace>
+    <AssemblyName>Jetstream.ServiceBase.Tests</AssemblyName>
+    <ProjectGuid>{2519D327-D36A-42A9-BC9F-D4C449AC1512}</ProjectGuid>
+    <SonarQubeExclude>true</SonarQubeExclude>
+    <IsPackable>false</IsPackable>
+    <Version>1.0.0</Version>
+    <Authors>Terso Solutions, Inc.</Authors>
+    <Product>Jetstream Service Base Tests</Product>
+    <Description>Unit tests for the Jetstream service base</Description>
+    <Copyright>Copyright © Terso Solutions, Inc. 2022</Copyright>
+    <Company>Terso Solutions, Inc.</Company>
+    <PackageIconUrl>https://cdn.tersosolutions.com/nuget/logo150.png</PackageIconUrl>
+    <PackageProjectUrl>https://www.jetstreamrfid.com</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/tersosolutions/JetstreamServiceBase</RepositoryUrl>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/tersosolutions/JetstreamServiceBase/master/LICENSE</PackageLicenseUrl>
+    <License>Apache-2.0</License>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Jetstream.ServiceBase.Tests.csproj.vspscc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.msbuild" Version="3.1.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.2.0" />
+    <PackageReference Include="xunit" Version="2.4.1" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="3.1.2">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Jetstream.ServiceBase\Jetstream.ServiceBase.csproj" />
+  </ItemGroup>
+
+</Project>
