@@ -1,0 +1,52 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup Label="Globals">
+    <SccProjectName>SAK</SccProjectName>
+    <SccProvider>SAK</SccProvider>
+    <SccAuxPath>SAK</SccAuxPath>
+    <SccLocalPath>SAK</SccLocalPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFrameworks>netstandard2.0;</TargetFrameworks>
+    <RootNamespace>TersoSolutions.Jetstream.ServiceBase</RootNamespace>
+    <AssemblyName>Jetstream.ServiceBase</AssemblyName>
+    <ProjectGuid>{55DA7864-736B-46EB-9106-3CB16B8AA46C}</ProjectGuid>
+    <Version>3.4.0</Version>
+    <Authors>Terso Solutions</Authors>
+    <Company>Terso Solutions, Inc.</Company>
+    <Copyright>Copyright © Terso Solutions, Inc. 2022</Copyright>
+    <Product>Jetstream Service Base</Product>
+    <Description>Jetstream service base handles processing events from a Jetstream application</Description>
+    <PackageIconUrl>https://cdn.tersosolutions.com/nuget/logo150.png</PackageIconUrl>
+    <PackageProjectUrl>https://www.jetstreamrfid.com</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/tersosolutions/JetstreamServiceBase</RepositoryUrl>
+    <PackageLicenseUrl>https://raw.githubusercontent.com/tersosolutions/JetstreamServiceBase/master/LICENSE</PackageLicenseUrl>
+    <License>Apache-2.0</License>
+    <AssemblyVersion>3.4.0</AssemblyVersion>
+    <FileVersion>3.4.0</FileVersion>
+    <CodeAnalysisRuleSet>..\.sonarlint\159880e7-a8e6-4b8c-aa22-fe0b5dd9cff8csharp.ruleset</CodeAnalysisRuleSet>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Jetstream.ServiceBase.csproj.vspscc" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="..\.sonarlint\159880e7-a8e6-4b8c-aa22-fe0b5dd9cff8\CSharp\SonarLint.xml" Link="SonarLint.xml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Jetstream.Sdk" Version="3.4.2.4898" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
+    <PackageReference Include="SecurityCodeScan.VS2019" Version="5.6.3">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="8.41.0.50478">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
