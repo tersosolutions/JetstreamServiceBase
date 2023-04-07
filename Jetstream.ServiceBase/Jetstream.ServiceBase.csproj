@@ -37,13 +37,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Jetstream.Sdk" Version="3.4.2.5159" />
+    <PackageReference Include="Jetstream.Sdk" Version="3.4.2.5585" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="6.0.1" />
     <PackageReference Include="SecurityCodeScan.VS2019" Version="5.6.7">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="SonarAnalyzer.CSharp" Version="8.51.0.59060">
+    <PackageReference Include="SonarAnalyzer.CSharp" Version="8.55.0.65544">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
