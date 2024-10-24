@@ -3,13 +3,15 @@
 ## Jetstream Service Base
 [Jetstream Documentation - https://jetstreamrfid.com/documentation/applicationapi/3](https://jetstreamrfid.com/documentation/applicationapi/3)
  
-### Microsoft .NET Standard 2.0
+### Microsoft .NET Standard 2.1
 The service base includes the ability to leverage the [Jetstream SDK](https://github.com/tersosolutions/JetstreamSDK-.NET) to get and remove events from Jetstream. Use those events to process inventory transactions in an application.
 
 ### Use the application or device API in a project
 Add a reference to the `Jetstream.Sdk.dll` or search for Jetstream.ServiceBase on NuGet
 
 ### Change History
+* v4.0.0 - June 6, 2024
+  * Update to netstandard 2.1
 * v3.4.0 - June 23, 2022
   * Update async methods to be task driven
   * Update base service to use IHostedService better

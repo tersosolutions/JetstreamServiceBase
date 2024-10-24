@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <RootNamespace>TersoSolutions.Jetstream.ServiceBase.Tests</RootNamespace>
     <AssemblyName>Jetstream.ServiceBase.Tests</AssemblyName>
     <ProjectGuid>{2519D327-D36A-42A9-BC9F-D4C449AC1512}</ProjectGuid>
@@ -18,7 +18,7 @@
     <Authors>Terso Solutions, Inc.</Authors>
     <Product>Jetstream Service Base Tests</Product>
     <Description>Unit tests for the Jetstream service base</Description>
-    <Copyright>Copyright © Terso Solutions, Inc. 2023</Copyright>
+    <Copyright>Copyright © Terso Solutions, Inc. 2024</Copyright>
     <Company>Terso Solutions, Inc.</Company>
     <PackageIconUrl>https://cdn.tersosolutions.com/nuget/logo150.png</PackageIconUrl>
     <PackageProjectUrl>https://www.jetstreamrfid.com</PackageProjectUrl>
@@ -32,17 +32,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="coverlet.msbuild" Version="3.2.0">
+    <PackageReference Include="coverlet.msbuild" Version="6.0.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.5.0" />
-    <PackageReference Include="xunit" Version="2.4.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="coverlet.collector" Version="3.2.0">
+    <PackageReference Include="coverlet.collector" Version="6.0.2">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
